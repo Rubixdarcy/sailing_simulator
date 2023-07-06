@@ -1,0 +1,18 @@
+[package]
+name = "sailing_simulator"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[features]
+debug = ["bevy-inspector-egui"]
+
+[dependencies]
+bevy = "0.10.1"
+bevy-inspector-egui = { version = "0.18", optional = true }
+#bevy_smud = "0.5"
+
+#bevy = { git = "https://github.com/bevyengine/bevy", branch = "main" }
+#bevy-inspector-egui = { git = "https://github.com/Vrixyz/bevy-inspector-egui", branch = "bevy-main", optional = true }
+#bevy_smud = "0.5"
