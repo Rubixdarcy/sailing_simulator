@@ -1,4 +1,5 @@
 use bevy::{prelude::*, math::Vec3Swizzles};
+use bevy_debug_text_overlay::screen_print;
 
 fn main() {
     let mut app = App::new();
@@ -7,19 +8,28 @@ fn main() {
         .register_type::<Wind>()
         .register_type::<Object>()
         .register_type::<Sail>()
-        ;
+        .register_type::<ResetTransform>()
+        .register_type::<ResetTransform>()
+        .register_type::<EventResetTransform>()
+    ;
 
     app
         .add_plugins(DefaultPlugins)
         .add_startup_system(sys_setup)
+        .add_system(sys_input)
         .add_systems((sys_wind_physics, sys_apply_velocity).chain())
+        .add_system(sys_reset_xf)
         .insert_resource(Wind(Vec2::new(0.0, 30.0)))
-        ;
+        .add_event::<EventResetTransform>()
+    ;
 
 
     #[cfg(feature = "debug")]
     {
-        app.add_plugin(bevy_inspector_egui::quick::WorldInspectorPlugin::new());
+        app
+            .add_plugin(bevy_inspector_egui::quick::WorldInspectorPlugin::new())
+            .add_plugin(bevy_debug_text_overlay::OverlayPlugin { font_size: 16.0, ..default() })
+        ;
     }
 
     app.run();
@@ -29,7 +39,6 @@ fn sys_setup(
     mut commands: Commands,
 ) {
     commands.spawn(Camera2dBundle::default());
-
     spawn_ship(commands);
 }
 
@@ -37,6 +46,7 @@ fn sys_setup(
 fn spawn_ship(mut cmd: Commands) {
     cmd.spawn(Name::new("Ship"))
         .insert(Object)
+        .insert(ResetTransform(default()))
         .insert(SpriteBundle {
             sprite: Sprite {
                 color: Color::MAROON,
@@ -109,10 +119,30 @@ fn sys_wind_physics(
         let boat_f = sail_f.project_onto(boat_dir);
         let boat_a = boat_f / BOAT_MASS;
 
-        // dbg!(real_wind_v, dt, boat_v, sail_dir, boat_dir, drag, apparent_wind_v, sail_f, boat_f, boat_a);
-
         boat_velocity.0 += boat_a * dt;
+    }
+}
 
-        //panic!("bailing");
+#[derive(Reflect, Default, Component)]
+struct ResetTransform(Transform);
+
+#[derive(Reflect, Default)]
+struct EventResetTransform;
+
+fn sys_reset_xf(mut ev_reset_xf: EventReader<EventResetTransform>,
+                mut q_transform: Query<(&mut Transform, &ResetTransform)>) {
+    if ev_reset_xf.iter().next().is_some() {
+        for (mut xf, reset_xf) in q_transform.iter_mut() {
+            *xf = reset_xf.0;
+            #[cfg(feature = "debug")]
+            screen_print!("Reset positions");
+        }
+    }
+}
+
+fn sys_input(keys: Res<Input<KeyCode>>,
+             mut evw_reset_xf: EventWriter<EventResetTransform>) {
+    if keys.just_released(KeyCode::R) {
+        evw_reset_xf.send(EventResetTransform);
     }
 }

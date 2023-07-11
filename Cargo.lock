@@ -311,6 +311,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "bevy-debug-text-overlay"
+version = "5.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3736a9eca883852373ce0d80b37c9df454a256095a9f79d139f32278785bb7b0"
+dependencies = [
+ "bevy",
+ "lazy_static",
+]
+
+[[package]]
 name = "bevy-inspector-egui"
 version = "0.18.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2875,6 +2885,7 @@ name = "sailing_simulator"
 version = "0.1.0"
 dependencies = [
  "bevy",
+ "bevy-debug-text-overlay",
  "bevy-inspector-egui",
 ]
 
