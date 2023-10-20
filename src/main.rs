@@ -1,25 +1,36 @@
-use bevy::{prelude::*, math::Vec3Swizzles};
+use bevy::{prelude::*, math::Vec3Swizzles, window::PrimaryWindow};
 use bevy_debug_text_overlay::screen_print;
 
 fn main() {
     let mut app = App::new();
     app
+        .register_type::<DebugGizmos>()
         .register_type::<Velocity>()
         .register_type::<Wind>()
         .register_type::<Object>()
         .register_type::<Sail>()
         .register_type::<ResetTransform>()
-        .register_type::<ResetTransform>()
         .register_type::<EventResetTransform>()
+        .register_type::<MousePos>()
     ;
 
     app
-        .add_plugins(DefaultPlugins)
-        .add_startup_system(sys_setup)
-        .add_system(sys_input)
-        .add_systems((sys_wind_physics, sys_apply_velocity).chain())
-        .add_system(sys_reset_xf)
+        .add_plugins(DefaultPlugins.set(WindowPlugin {
+            primary_window: Some(Window {
+                title: "Sailing Simulator?!".into(),
+                ..default()
+            }),
+            ..default()
+        }))
+        .add_systems(Startup, sys_setup)
+        .add_systems(Update, sys_input)
+        .add_systems(Update, sys_draw_debug_gizmos)
+        .add_systems(Update, (sys_wind_physics, sys_apply_velocity).chain())
+        .add_systems(Update, sys_reset_xf)
+        .add_systems(Update, sys_mouse_track)
         .insert_resource(Wind(Vec2::new(0.0, 30.0)))
+        .insert_resource(DebugGizmos(Vec2::new(300.0, -200.0)))
+        .init_resource::<MousePos>()
         .add_event::<EventResetTransform>()
     ;
 
@@ -27,8 +38,8 @@ fn main() {
     #[cfg(feature = "debug")]
     {
         app
-            .add_plugin(bevy_inspector_egui::quick::WorldInspectorPlugin::new())
-            .add_plugin(bevy_debug_text_overlay::OverlayPlugin { font_size: 16.0, ..default() })
+            .add_plugins(bevy_inspector_egui::quick::WorldInspectorPlugin::new())
+            .add_plugins(bevy_debug_text_overlay::OverlayPlugin { font_size: 16.0, ..default() })
         ;
     }
 
@@ -69,6 +80,17 @@ fn spawn_ship(mut cmd: Commands) {
                     ..default()
                 });
         });
+}
+
+#[derive(Default, Copy, Clone, Resource, Reflect)]
+#[reflect(Resource)]
+struct DebugGizmos(Vec2);
+
+
+fn sys_draw_debug_gizmos(mut gizmos: Gizmos, debug_gizmos: Res<DebugGizmos>, wind: Res<Wind>) {
+    const SCALE_FACTOR: f32 = 1.0;
+    gizmos.circle_2d(debug_gizmos.0, 5.0, Color::RED);
+    gizmos.line_2d(debug_gizmos.0, debug_gizmos.0 + SCALE_FACTOR * wind.0, Color::GREEN);
 }
 
 
@@ -126,17 +148,20 @@ fn sys_wind_physics(
 #[derive(Reflect, Default, Component)]
 struct ResetTransform(Transform);
 
-#[derive(Reflect, Default)]
+#[derive(Reflect, Default, Event)]
 struct EventResetTransform;
 
 fn sys_reset_xf(mut ev_reset_xf: EventReader<EventResetTransform>,
-                mut q_transform: Query<(&mut Transform, &ResetTransform)>) {
+                mut q_transform: Query<(&mut Transform, Option<&mut Velocity>, &ResetTransform)>) {
     if ev_reset_xf.iter().next().is_some() {
-        for (mut xf, reset_xf) in q_transform.iter_mut() {
+        for (mut xf, velocity, reset_xf) in q_transform.iter_mut() {
             *xf = reset_xf.0;
-            #[cfg(feature = "debug")]
-            screen_print!("Reset positions");
+            if let Some(mut v) = velocity {
+                *v = Velocity(Vec2::ZERO);
+            }
         }
+        #[cfg(feature = "debug")]
+        screen_print!("Reset positions");
     }
 }
 
@@ -144,5 +169,41 @@ fn sys_input(keys: Res<Input<KeyCode>>,
              mut evw_reset_xf: EventWriter<EventResetTransform>) {
     if keys.just_released(KeyCode::R) {
         evw_reset_xf.send(EventResetTransform);
+    }
+}
+
+#[derive(Reflect, Default, Resource)]
+#[reflect(Resource)]
+struct MousePos {
+    last_left: Vec2,
+    last_right: Vec2,
+    current_left: Vec2,
+    current_right: Vec2,
+    left_pressed: bool,
+    right_pressed: bool,
+}
+
+fn sys_mouse_track(q_windows: Query<&Window, With<PrimaryWindow>>,
+                   buttons: Res<Input<MouseButton>>,
+                   mut mouse_pos: ResMut<MousePos>) {
+    let Some(pos) = q_windows.single().cursor_position() else { return; };
+
+    if buttons.just_pressed(MouseButton::Left) {
+        mouse_pos.last_left = pos;
+    }
+    if buttons.just_pressed(MouseButton::Right) {
+        mouse_pos.last_right = pos;
+    }
+    if buttons.pressed(MouseButton::Left) {
+        mouse_pos.current_left = pos;
+        mouse_pos.left_pressed = true;
+    } else {
+        mouse_pos.left_pressed = false;
+    }
+    if buttons.pressed(MouseButton::Right) {
+        mouse_pos.current_right = pos;
+        mouse_pos.right_pressed = true;
+    } else {
+        mouse_pos.right_pressed = false;
     }
 }
