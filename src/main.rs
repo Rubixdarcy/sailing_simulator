@@ -1,5 +1,5 @@
 use bevy::{prelude::*, math::Vec3Swizzles, window::PrimaryWindow};
-use bevy_debug_text_overlay::screen_print;
+use bevy::color::palettes::basic;
 
 fn main() {
     let mut app = App::new();
@@ -23,6 +23,7 @@ fn main() {
             ..default()
         }))
         .add_systems(Startup, sys_setup)
+        .add_systems(Startup, sys_spawn_ship)
         .add_systems(Update, sys_input)
         .add_systems(Update, sys_draw_debug_gizmos)
         .add_systems(Update, (sys_wind_physics, sys_apply_velocity).chain())
@@ -39,7 +40,6 @@ fn main() {
     {
         app
             .add_plugins(bevy_inspector_egui::quick::WorldInspectorPlugin::new())
-            .add_plugins(bevy_debug_text_overlay::OverlayPlugin { font_size: 16.0, ..default() })
         ;
     }
 
@@ -49,36 +49,27 @@ fn main() {
 fn sys_setup(
     mut commands: Commands,
 ) {
-    commands.spawn(Camera2dBundle::default());
-    spawn_ship(commands);
+    commands.spawn(Camera2d::default());
 }
 
 
-fn spawn_ship(mut cmd: Commands) {
+fn sys_spawn_ship(mut cmd: Commands, mut meshes: ResMut<Assets<Mesh>>, mut colors: ResMut<Assets<ColorMaterial>>) {
+
+    let sail_mesh = meshes.add(Rectangle::new(75.0, 10.0));
+    let sail_color = colors.add(Color::WHITE);
+
+    let ship_mesh = meshes.add(Rectangle::new(35.0, 80.0));
+    let ship_color = colors.add(Color::Srgba(basic::MAROON));
+
     cmd.spawn(Name::new("Ship"))
         .insert(Object)
         .insert(ResetTransform(default()))
-        .insert(SpriteBundle {
-            sprite: Sprite {
-                color: Color::MAROON,
-                custom_size: Some(Vec2::new(35.0, 80.0)),
-                ..default()
-            },
-            ..default()
-        })
+        .insert((Mesh2d(ship_mesh), MeshMaterial2d(ship_color)))
         .insert(Velocity(Vec2::new(0.0, 0.0)))
         .with_children(|ship| {
             ship.spawn(Name::new("Sail"))
                 .insert((Object, Sail { drag_coefficient: 0.3 }))
-                .insert(SpriteBundle {
-                    sprite: Sprite {
-                        color: Color::WHITE,
-                        custom_size: Some(Vec2::new(75.0, 10.0)),
-                        ..default()
-                    },
-                    transform: Transform::from_xyz(0.0, 20.0, 1.0),
-                    ..default()
-                });
+                .insert((Mesh2d(sail_mesh), MeshMaterial2d(sail_color)));
         });
 }
 
@@ -89,8 +80,8 @@ struct DebugGizmos(Vec2);
 
 fn sys_draw_debug_gizmos(mut gizmos: Gizmos, debug_gizmos: Res<DebugGizmos>, wind: Res<Wind>) {
     const SCALE_FACTOR: f32 = 1.0;
-    gizmos.circle_2d(debug_gizmos.0, 5.0, Color::RED);
-    gizmos.line_2d(debug_gizmos.0, debug_gizmos.0 + SCALE_FACTOR * wind.0, Color::GREEN);
+    gizmos.circle_2d(debug_gizmos.0, 5.0, basic::RED);
+    gizmos.line_2d(debug_gizmos.0, debug_gizmos.0 + SCALE_FACTOR * wind.0, basic::GREEN);
 }
 
 
@@ -99,7 +90,7 @@ struct Velocity(Vec2);
 
 fn sys_apply_velocity(time: Res<Time>, mut q: Query<(&mut Transform, &Velocity)>) {
     for (mut transform, velocity) in q.iter_mut() {
-        transform.translation += time.delta_seconds() * velocity.0.extend(0.0);
+        transform.translation += time.delta_secs() * velocity.0.extend(0.0);
     }
 }
 
@@ -127,7 +118,7 @@ fn sys_wind_physics(
     const BOAT_MASS: f32 = 1.0;
 
     let real_wind_v = wind.0;
-    let dt = time.delta_seconds();
+    let dt = time.delta_secs();
 
     for (sail, sail_xf, sail_parent) in q_sail.iter() {
         let Ok((mut boat_velocity, &boat_xf)) = q_boat.get_mut(sail_parent.get()) else { continue };
@@ -153,21 +144,19 @@ struct EventResetTransform;
 
 fn sys_reset_xf(mut ev_reset_xf: EventReader<EventResetTransform>,
                 mut q_transform: Query<(&mut Transform, Option<&mut Velocity>, &ResetTransform)>) {
-    if ev_reset_xf.iter().next().is_some() {
+    if ev_reset_xf.read().next().is_some() {
         for (mut xf, velocity, reset_xf) in q_transform.iter_mut() {
             *xf = reset_xf.0;
             if let Some(mut v) = velocity {
                 *v = Velocity(Vec2::ZERO);
             }
         }
-        #[cfg(feature = "debug")]
-        screen_print!("Reset positions");
     }
 }
 
-fn sys_input(keys: Res<Input<KeyCode>>,
+fn sys_input(keys: Res<ButtonInput<KeyCode>>,
              mut evw_reset_xf: EventWriter<EventResetTransform>) {
-    if keys.just_released(KeyCode::R) {
+    if keys.just_released(KeyCode::KeyR) {
         evw_reset_xf.send(EventResetTransform);
     }
 }
@@ -184,7 +173,7 @@ struct MousePos {
 }
 
 fn sys_mouse_track(q_windows: Query<&Window, With<PrimaryWindow>>,
-                   buttons: Res<Input<MouseButton>>,
+                   buttons: Res<ButtonInput<MouseButton>>,
                    mut mouse_pos: ResMut<MousePos>) {
     let Some(pos) = q_windows.single().cursor_position() else { return; };
 
