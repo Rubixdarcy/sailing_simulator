@@ -11,8 +11,8 @@ debug = []
 
 
 [dependencies]
-bevy = "0.15.0"
-bevy-inspector-egui = { version = "0.28" }
+bevy = "0.16.0"
+bevy-inspector-egui = { version = "0.31" }
 #bevy_smud = "0.5"
 
 [profile.dev]
